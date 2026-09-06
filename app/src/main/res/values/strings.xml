@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Estonian Dictation</string>
+    <string name="ime_label">Estonian Dictation Keyboard</string>
+    <string name="subtype_et">Estonian (dictation)</string>
+
+    <!-- Keyboard status line -->
+    <string name="status_idle">Tap the microphone to dictate</string>
+    <string name="status_loading">Loading model…</string>
+    <string name="status_listening">Listening…</string>
+    <string name="status_needs_permission">Microphone permission needed — opening settings</string>
+    <string name="status_needs_model">Model not downloaded yet — opening settings</string>
+    <string name="status_model_failed">Could not load the model</string>
+    <string name="status_no_microphone">Microphone unavailable</string>
+
+    <!-- Keyboard buttons -->
+    <string name="key_mic">Dictate</string>
+    <string name="key_backspace">Backspace</string>
+    <string name="key_space">Space</string>
+    <string name="key_enter">Enter</string>
+    <string name="key_switch_keyboard">Switch keyboard</string>
+    <string name="key_settings">Settings</string>
+
+    <!-- Setup screen -->
+    <string name="setup_title">Estonian Dictation</string>
+    <string name="setup_intro">Speech recognition runs entirely on this device. Nothing is sent anywhere, and the model is downloaded once.</string>
+
+    <string name="setup_permission_heading">1. Microphone</string>
+    <string name="setup_permission_granted">Granted.</string>
+    <string name="setup_permission_missing">Not granted. A keyboard cannot ask for this itself, so grant it here.</string>
+    <string name="setup_grant_permission">Grant microphone access</string>
+
+    <string name="setup_model_heading">2. Speech model</string>
+    <string name="setup_model_missing">Not downloaded.</string>
+    <string name="setup_model_installed">Installed (%1$d MB).</string>
+    <string name="setup_download_model">Download model</string>
+    <string name="setup_cancel_download">Cancel download</string>
+    <string name="setup_delete_model">Delete model</string>
+    <string name="setup_downloading">Downloading %1$s (%2$d/%3$d) — %4$d MB</string>
+    <string name="setup_download_done">Download complete.</string>
+    <string name="setup_download_cancelled">Download cancelled. It will resume where it stopped.</string>
+    <string name="setup_download_failed">Download failed: %1$s</string>
+
+    <string name="setup_keyboard_heading">3. Enable the keyboard</string>
+    <string name="setup_keyboard_body">Turn on “Estonian Dictation Keyboard” in the system keyboard list, then pick it with the globe key.</string>
+    <string name="setup_open_keyboard_settings">Open keyboard settings</string>
+
+    <string name="setup_credits_heading">Credits</string>
+    <string name="setup_credits">Speech model: streaming Zipformer (Estonian + English) by the Laboratory of Language Technology, TalTech — MIT licence.\nRuntime: sherpa-onnx by k2-fsa — Apache 2.0 licence.</string>
+</resources>

@@ -35,3 +35,7 @@ google-services.json
 
 # Model files (see PLAN.md — downloaded, never committed)
 models/
+
+# Vendored sherpa-onnx runtime (scripts/fetch-sherpa-onnx.sh) — pinned, not committed
+app/src/main/jniLibs/
+app/src/main/java/com/k2fsa/

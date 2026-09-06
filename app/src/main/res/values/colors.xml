@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#1B3A5C</color>
+
+    <color name="keyboard_background">#FF20242B</color>
+    <color name="key_background">#FF2F343D</color>
+    <color name="key_background_pressed">#FF3D444F</color>
+    <color name="key_foreground">#FFE6E9EE</color>
+    <color name="mic_idle">#FF3A4250</color>
+    <color name="mic_listening">#FFC2453C</color>
+    <color name="status_text">#FF9AA3B2</color>
+</resources>

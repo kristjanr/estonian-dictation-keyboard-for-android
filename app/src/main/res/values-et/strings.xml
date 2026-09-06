@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Eestikeelne dikteerimine</string>
+    <string name="ime_label">Eestikeelne dikteerimisklaviatuur</string>
+    <string name="subtype_et">Eesti (dikteerimine)</string>
+
+    <string name="status_idle">Dikteerimiseks puuduta mikrofoni</string>
+    <string name="status_loading">Mudeli laadimine…</string>
+    <string name="status_listening">Kuulan…</string>
+    <string name="status_needs_permission">Vajalik on mikrofoni luba — avan seaded</string>
+    <string name="status_needs_model">Mudel on alla laadimata — avan seaded</string>
+    <string name="status_model_failed">Mudeli laadimine ebaõnnestus</string>
+    <string name="status_no_microphone">Mikrofon pole saadaval</string>
+
+    <string name="key_mic">Dikteeri</string>
+    <string name="key_backspace">Kustuta</string>
+    <string name="key_space">Tühik</string>
+    <string name="key_enter">Sisesta</string>
+    <string name="key_switch_keyboard">Vaheta klaviatuuri</string>
+    <string name="key_settings">Seaded</string>
+
+    <string name="setup_title">Eestikeelne dikteerimine</string>
+    <string name="setup_intro">Kõnetuvastus toimub täielikult selles seadmes. Midagi ei saadeta kuhugi ja mudel laaditakse alla ühe korra.</string>
+
+    <string name="setup_permission_heading">1. Mikrofon</string>
+    <string name="setup_permission_granted">Luba antud.</string>
+    <string name="setup_permission_missing">Luba puudub. Klaviatuur ei saa seda ise küsida, seega anna see siin.</string>
+    <string name="setup_grant_permission">Anna mikrofoni luba</string>
+
+    <string name="setup_model_heading">2. Kõnemudel</string>
+    <string name="setup_model_missing">Alla laadimata.</string>
+    <string name="setup_model_installed">Paigaldatud (%1$d MB).</string>
+    <string name="setup_download_model">Laadi mudel alla</string>
+    <string name="setup_cancel_download">Katkesta allalaadimine</string>
+    <string name="setup_delete_model">Kustuta mudel</string>
+    <string name="setup_downloading">Laadin: %1$s (%2$d/%3$d) — %4$d MB</string>
+    <string name="setup_download_done">Allalaadimine valmis.</string>
+    <string name="setup_download_cancelled">Allalaadimine katkestatud. See jätkub sealt, kus pooleli jäi.</string>
+    <string name="setup_download_failed">Allalaadimine ebaõnnestus: %1$s</string>
+
+    <string name="setup_keyboard_heading">3. Luba klaviatuur</string>
+    <string name="setup_keyboard_body">Lülita süsteemi klaviatuuride loendis sisse „Eestikeelne dikteerimisklaviatuur“ ja vali see maakera-klahviga.</string>
+    <string name="setup_open_keyboard_settings">Ava klaviatuuri seaded</string>
+
+    <string name="setup_credits_heading">Tänud</string>
+    <string name="setup_credits">Kõnemudel: voogedastav Zipformer (eesti + inglise), TalTechi keeletehnoloogia labor — MIT litsents.\nMootor: sherpa-onnx, k2-fsa — Apache 2.0 litsents.</string>
+</resources>

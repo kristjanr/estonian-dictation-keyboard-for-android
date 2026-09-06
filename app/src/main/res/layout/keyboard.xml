@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/keyboard_background"
+    android:orientation="vertical"
+    android:paddingHorizontal="6dp"
+    android:paddingBottom="8dp">
+
+    <TextView
+        android:id="@+id/status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingVertical="8dp"
+        android:textColor="@color/status_text"
+        android:textSize="13sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/switch_keyboard"
+            style="@style/KeyIcon"
+            android:contentDescription="@string/key_switch_keyboard"
+            android:src="@drawable/ic_language" />
+
+        <Button
+            android:id="@+id/punct_comma"
+            style="@style/KeyText"
+            android:text="," />
+
+        <Button
+            android:id="@+id/punct_period"
+            style="@style/KeyText"
+            android:text="." />
+
+        <Button
+            android:id="@+id/punct_question"
+            style="@style/KeyText"
+            android:text="?" />
+
+        <Button
+            android:id="@+id/punct_exclamation"
+            style="@style/KeyText"
+            android:text="!" />
+
+        <ImageButton
+            android:id="@+id/backspace"
+            style="@style/KeyIcon"
+            android:contentDescription="@string/key_backspace"
+            android:src="@drawable/ic_backspace" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/settings"
+            style="@style/KeyIcon"
+            android:contentDescription="@string/key_settings"
+            android:src="@drawable/ic_settings" />
+
+        <ImageButton
+            android:id="@+id/mic"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="3"
+            android:layout_margin="3dp"
+            android:background="@drawable/mic_background"
+            android:contentDescription="@string/key_mic"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_mic" />
+
+        <Button
+            android:id="@+id/space"
+            style="@style/KeyText"
+            android:layout_weight="2"
+            android:text="@string/key_space"
+            android:textSize="13sp" />
+
+        <ImageButton
+            android:id="@+id/enter"
+            style="@style/KeyIcon"
+            android:contentDescription="@string/key_enter"
+            android:src="@drawable/ic_keyboard_return" />
+    </LinearLayout>
+</LinearLayout>
