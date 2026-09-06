@@ -1,6 +1,6 @@
 # Estonian Dictation Keyboard for Android — Project Plan
 
-_Last updated: 2026-09-06_
+_Last updated: 2026-09-06. Facts marked ✅ were verified on that date against the source; see RESEARCH.md for details and links._
 
 ## Goal
 
@@ -24,12 +24,12 @@ Reference product: [Lausu](https://lausu.ee) (iOS, Whisper-based, non-streaming,
 
 All models are published by TalTech NLP on Hugging Face. **No export is needed for the Zipformer; the ONNX files are published directly.**
 
-| Role | Model | Notes |
-|---|---|---|
-| Streaming (pass 1) | `TalTechNLP/streaming-zipformer-large.et-en` | ~150M params, ET+EN, punctuation built in, MIT. Files: `encoder.onnx`, `decoder.onnx`, `joiner.onnx`, `tokens.txt`. Updated Sept 2026. |
-| Streaming, numbers variant | `TalTechNLP/streaming-zipformer-large.et-en.w2n` | Same model with words-to-numbers baked in (assumed from name — verify on model card). Prefer for dictation. |
-| Accurate (pass 2) | `TalTechNLP/whisper-large-v3-turbo-et-verbatim-2604` | ~800M params, finetuned on 1400 h manually transcribed verbatim Estonian. Needs export to sherpa-onnx ONNX format. **Check licence on model card before distributing.** |
-| Smaller streaming fallback | `TalTechNLP/streaming-zipformer.et-en` | If the large model is too heavy on target phones. |
+| Role | Model | Licence | Notes |
+|---|---|---|---|
+| Streaming (pass 1) | `TalTechNLP/streaming-zipformer-large.et-en` | MIT ✅ | ~150M params, ET+EN, capitalisation + punctuation built in. Files: `encoder.onnx`, `decoder.onnx`, `joiner.onnx`, `tokens.txt`. Used in production by `alumae/kiirkirjutaja` since 2026-07-03 ✅ |
+| Streaming, numbers variant | `TalTechNLP/streaming-zipformer-large.et-en.w2n` | Apache-2.0 ✅ | Vocabulary contains digit tokens `0`–`9`, consistent with words-to-numbers output ("kakskümmend viis" → "25") ✅. Semantics not documented on the card — confirm empirically in Phase 0. |
+| Accurate (pass 2) | `TalTechNLP/whisper-large-v3-turbo-et-verbatim-2604` | MIT ✅ | 0.8B params. Trained on 1400 h manual verbatim + ~4000 h auto-transcribed ERR news + ~500 h English podcasts/YouTube; explicitly targets English terms inside Estonian sentences (tech talk) ✅. Card ships **ct2** (faster-whisper) and **GGML** (whisper.cpp, added 2026-06-17) exports ✅. Redistribution / download-on-first-run is fine under MIT with attribution. |
+| Smaller streaming fallback | `TalTechNLP/streaming-zipformer.et-en` | MIT ✅ | Card ships `*.int8.onnx` files. Powers the browser app https://eestiasr.vercel.app/ ✅ |
 
 Author's reference recogniser config (from `alumae/kiirkirjutaja/main.py`, which uses the same Zipformer model in production for live TV subtitles):
 
@@ -63,6 +63,7 @@ Post-processing: kiirkirjutaja's old compound-word, words-to-numbers and punctua
 - Bundled Silero VAD for endpointing the Whisper segments
 - Prebuilt Android JNI libs / AAR in releases; Kotlin API
 - Existing Android demos: streaming ASR, two-pass ASR (streaming + offline re-decode) — use the two-pass demo as the architectural template
+- **Qualcomm NPU (QNN) support is recent and relevant** ✅: v1.13.3 added streaming Zipformer transducer on QNN with an Android demo; v1.13.4 added Whisper on QNN plus a Whisper→QNN export script. Caveats: QNN models take fixed-length input (padded/truncated to a max duration baked into the model), need the QNN SDK at build time, and only run on Snapdragon. Treat as a Phase 3 optimisation, not a Phase 1 dependency.
 
 Do **not** build the C++ from source unless a needed feature is missing.
 
@@ -75,7 +76,8 @@ Do **not** build the C++ from source unless a needed feature is missing.
 - [ ] `pip install sherpa-onnx` (Linux aarch64 wheel; Asahi/Omarchy)
 - [ ] Download Zipformer files from HF (`git lfs` or `huggingface-cli`)
 - [ ] Run the sherpa-onnx microphone streaming example with the config above; dictate for 10 minutes; note error types
-- [ ] Export Whisper-turbo-et-verbatim-2604 using sherpa-onnx's Whisper export script (accepts a local HF checkpoint path); produce int8 variant
+- [ ] Export Whisper-turbo-et-verbatim-2604 with `sherpa-onnx/scripts/whisper/export-onnx.py` (accepts a local HF checkpoint path); produce int8 variant. Shortcut for a first accuracy check: the card's ready-made GGML file runs directly in whisper.cpp, no export needed
+- [ ] Dictate 10 sentences with numbers ("kakskümmend viis eurot", "kell pool kolm") through both Zipformer variants; confirm `.w2n` emits digits
 - [ ] Run `OfflineRecognizer` on recordings of the same sentences; compare accuracy by ear and measure seconds-per-sentence on the M2 (phone will be ~3–6× slower)
 - [ ] Record 20 phone-mic-quality test sentences (names, numbers, mixed ET/EN, quiet room, kitchen noise) as a fixed regression set for later phases
 
@@ -139,14 +141,16 @@ Do **not** build the C++ from source unless a needed feature is missing.
 | Min SDK | Android 10 (API 29) | Keeps audio + permission code simple |
 | Text insertion | composing text + commit | Native fit for streaming revisions and two-pass replacement |
 | Whisper delivery | first-run download | 800 MB does not belong in an APK |
-| Target phone | ≥ 8 GB RAM (12 GB comfortable) | Whisper-turbo int8 resident in RAM alongside host app |
+| Target phone | ≥ 8 GB RAM (12 GB comfortable); prefer Snapdragon 8 Gen 3 / 8 Elite | Whisper-turbo int8 resident in RAM alongside host app; Snapdragon keeps the sherpa-onnx QNN path open for both models |
+| Model files | Not in git; `models/` is gitignored; download script in `scripts/` | Agent environments may block huggingface.co — download on the laptop, then point the agent at local files |
 
 ## Open questions
 
-- Whisper-turbo-et licence terms for redistribution/download-on-first-run
-- Whether the `.w2n` variant is words-to-numbers as assumed
-- Real Whisper-turbo latency on the chosen Android phone (sherpa-onnx NPU acceleration does not cover Whisper as far as known — verify current state)
+- Actual Whisper-turbo latency on the chosen phone, CPU path vs QNN path (measure in Phase 3)
 - Whether phone-mic audio changes the Zipformer-vs-Whisper accuracy gap reported for broadcast speech (TalTech EACL 2026: streaming Zipformer "very close" to offline finetuned Whisper)
+- QNN fixed-input-length constraint: what max duration to bake in for dictation segments (10 s? 20 s?)
+
+Resolved 2026-09-06 (see RESEARCH.md): Whisper licence = MIT; `.w2n` vocab has digit tokens; sherpa-onnx has Whisper and streaming Zipformer on Qualcomm NPU as of v1.13.3–1.13.4.
 
 ## References
 

@@ -9,10 +9,12 @@ on-device — no cloud, no account, no word quota.
   with TalTech's finetuned Whisper-turbo and the provisional text is replaced.
 
 Status: planning. See [PLAN.md](PLAN.md) for models, runtime choices, phases
-and open questions.
+and open questions, and [RESEARCH.md](RESEARCH.md) for the verified facts
+behind it (licences, model card details, sherpa-onnx NPU support).
 
 Models are published by [TalTech NLP](https://huggingface.co/TalTechNLP).
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE). Model licences are separate; see PLAN.md.
+MIT — see [LICENSE](LICENSE). The models carry their own licences (MIT /
+Apache-2.0); see RESEARCH.md.
