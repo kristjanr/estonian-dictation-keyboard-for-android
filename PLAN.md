@@ -1,6 +1,8 @@
 # Estonian Dictation Keyboard for Android — Project Plan
 
-_Last updated: 2026-09-06. Facts marked ✅ were verified on that date against the source; see RESEARCH.md for details and links._
+_Last updated: 2026-09-08. Facts marked ✅ were verified on 2026-09-06 against the source; see RESEARCH.md for details and links._
+
+_Phases 1 and 2 are written but have never been built or run — see the status table in README.md and the context in CLAUDE.md._
 
 ## Goal
 
@@ -83,15 +85,18 @@ Do **not** build the C++ from source unless a needed feature is missing.
 
 **Decision gate:** if Whisper's accuracy gain on phone-style audio is small, defer Phase 3 (two-pass) indefinitely and ship Zipformer-only.
 
-**Known risk:** Android Studio has no official Linux-arm64 build. Plan for Gradle CLI + `adb` to a physical phone; no emulator.
+**Build host:** macOS on Apple Silicon. Android Studio ships an official build for it and arm64 system images run natively, so the emulator is available — the first compile, resource inflation and keyboard layout can all be checked without a phone. (This was a real constraint while the plan assumed Linux-arm64, where Android Studio has no official build and there is no usable emulator; on that host it is Gradle CLI + `adb` to a physical phone.)
+
+The phone is still required for what actually matters: real microphone audio, latency and thermals. It is just no longer required to find the first bug.
 
 ## Phase 1 — Android skeleton
 
 **Goal:** Estonian streaming ASR running in a plain Android app.
 
-- [ ] Clone `k2-fsa/sherpa-onnx` `android/` demos: streaming ASR and two-pass
-- [ ] Build and deploy both unchanged with prebuilt JNI libs; confirm they run on the target phone
-- [ ] Replace demo model files with TalTech Zipformer; adapt config to match the reference block above
+- [x] ~~Clone `k2-fsa/sherpa-onnx` `android/` demos~~ — superseded: the app was written directly against the sherpa-onnx Kotlin API, with the two-pass demo as the architectural reference rather than a starting point
+- [ ] First compile and run on the emulator: does it build, do the layouts inflate, does the keyboard appear
+- [ ] Deploy to the target phone and confirm the prebuilt JNI libs load
+- [x] ~~Replace demo model files with TalTech Zipformer~~ — config written to match the reference block above; unverified against a running model
 - [ ] Model delivery:
   - Zipformer (~150 MB int8): bundle in APK or download on first launch (decide based on APK size tolerance)
   - Whisper (~800 MB int8): **always** download on first run to app-private storage, with progress UI and resume. Never ship in the APK.
@@ -100,6 +105,8 @@ Do **not** build the C++ from source unless a needed feature is missing.
 ## Phase 2 — Make it a keyboard
 
 **Goal:** dictation into any text field. This is the bulk of the work.
+
+_Every item below except the last two is written; none is verified on a device. Boxes stay unticked until something has actually run._
 
 - [ ] `InputMethodService` with minimal keyboard view: mic button, ET/EN toggle, backspace, space, `.` `,` `?` `!`, "switch keyboard"
 - [ ] Reference for IME lifecycle and edge cases: `Kaljurand/K6nele` source (UI is dated; lifecycle handling is correct)
