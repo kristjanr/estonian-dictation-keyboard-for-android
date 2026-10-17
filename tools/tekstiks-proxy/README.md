@@ -57,22 +57,23 @@ Cloud Run fits this well. It needs a container (for ffmpeg), it scales to
 zero when idle, and the free tier covers personal use many times over. A cold
 start adds a few seconds to the first request after a quiet spell.
 
-From [Cloud Shell](https://shell.cloud.google.com), with this repo cloned:
+One-time setup by a human: install the
+[gcloud CLI](https://cloud.google.com/sdk/docs/install), run
+`gcloud auth login`, and create a
+[billing account](https://console.cloud.google.com/billing). Cloud Run
+requires one even when usage stays inside the free tier. Then:
 
 ```bash
-TOKEN=$(openssl rand -hex 16); echo "Your token: $TOKEN"
-gcloud run deploy tekstiks-proxy \
-  --source tools/tekstiks-proxy \
-  --region europe-north1 \
-  --allow-unauthenticated \
-  --set-env-vars PROXY_TOKEN=$TOKEN \
-  --memory 512Mi --timeout 300
+./deploy.sh                    # scales to zero: free, ~1-2 s boot after idle
+MIN_INSTANCES=1 ./deploy.sh    # always warm: no boot delay, ~$4-5/month
 ```
 
-`--allow-unauthenticated` turns off Google's own sign-in check, because
-Shortcuts can't do Google sign-in. The `PROXY_TOKEN` takes its place.
+The script creates a project, links billing, enables the APIs, deploys,
+runs a test transcription and prints the URL and token for the Shortcut.
+It's safe to re-run, and it keeps the same token.
 
-The command prints the service URL. Any host that runs a Dockerfile (Fly.io,
+`--allow-unauthenticated` turns off Google's own sign-in check, because
+Shortcuts can't do Google sign-in. The `PROXY_TOKEN` takes its place. Any host that runs a Dockerfile (Fly.io,
 Railway, a VPS) works the same way.
 
 ## iOS Shortcut
