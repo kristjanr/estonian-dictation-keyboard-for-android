@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 # Deploy tekstiks-proxy to Google Cloud Run.
 #
+# The service runs TalTech's Zipformer in-process (baked into the image), so it
+# does not depend on tekstiks.ee. The name stays "tekstiks-proxy" so redeploys
+# keep the same URL and the iOS Shortcut keeps working.
+#
 # Prerequisites (one-time, by a human):
 #   1. Install the gcloud CLI:  https://cloud.google.com/sdk/docs/install
 #   2. gcloud auth login
 #   3. A billing account with a card: https://console.cloud.google.com/billing
 #
-# Then:  ./deploy.sh            (scales to zero: free, ~1-2 s boot after idle)
-#        MIN_INSTANCES=1 ./deploy.sh   (always warm: no boot, ~$4-5/month)
+# Then:  ./deploy.sh                  (always warm: answers in ~1 s, ~$8-13/month)
+#        MIN_INSTANCES=0 ./deploy.sh  (free, but ~7 s to load the model after idle)
 #
 # Safe to re-run: it reuses the project and keeps the existing token.
 
@@ -15,7 +19,7 @@ set -euo pipefail
 
 SERVICE=tekstiks-proxy
 REGION=${REGION:-europe-north1}          # Finland: closest Cloud Run region to tekstiks.ee
-MIN_INSTANCES=${MIN_INSTANCES:-0}
+MIN_INSTANCES=${MIN_INSTANCES:-1}
 HERE=$(cd "$(dirname "$0")" && pwd)
 STATE="$HERE/.deploy-project"            # remembers the project id between runs (gitignored)
 
@@ -59,15 +63,17 @@ TOKEN=${PROXY_TOKEN:-$(gcloud run services describe "$SERVICE" --project="$PROJE
 [ -n "$TOKEN" ] || TOKEN=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
 
 # --- deploy ----------------------------------------------------------------
+# Sizing measured with the container capped at 1 CPU / 1 GB: ~270 MB used, a
+# 9 s message decoded in ~1 s; a second CPU barely helps this model.
 # --max-instances 1: one personal user needs one instance, and it caps the bill
-# if the URL and token ever leak. --cpu-boost shortens cold starts.
-step "Building and deploying (first run takes a few minutes)"
+# if the URL and token ever leak. --cpu-boost shortens the model load.
+step "Building and deploying (the build downloads the ~156 MB model; a few minutes)"
 gcloud run deploy "$SERVICE" \
   --project="$PROJECT" --region="$REGION" \
   --source="$HERE" \
   --allow-unauthenticated \
   --set-env-vars="PROXY_TOKEN=$TOKEN" \
-  --cpu=1 --memory=512Mi --timeout=300 \
+  --cpu=1 --memory=1Gi --timeout=300 \
   --min-instances="$MIN_INSTANCES" --max-instances=1 \
   --cpu-boost \
   --quiet

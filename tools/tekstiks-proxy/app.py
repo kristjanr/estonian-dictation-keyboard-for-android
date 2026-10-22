@@ -1,55 +1,36 @@
-"""HTTP -> WebSocket bridge for tekstiks.ee speech recognition.
+"""POST an audio file, get Estonian text back.
 
-iOS Shortcuts can POST a file but cannot speak WebSocket, which is the only way
-tekstiks.ee does live recognition (wss://tekstiks.ee/asr/v2, undocumented; the
-protocol was read from the site's /dictate page). This service takes an audio
-file in a POST, streams it to that socket and returns the transcript as plain
-text.
+iOS Shortcuts can POST a file and read the reply, nothing more. This service
+decodes the upload with ffmpeg and runs TalTech's Zipformer on it in-process
+(BACKEND=local, the default), or relays it to tekstiks.ee's live recogniser
+(BACKEND=tekstiks).
 
     curl --data-binary @memo.m4a -H "Authorization: Bearer $TOKEN" \
          https://<host>/transcribe
 """
 
 import asyncio
-import base64
-import json
 import logging
 import os
 import tempfile
 import time
 
-from aiohttp import ClientSession, WSMsgType, web
+from aiohttp import ClientSession, web
 
-UPSTREAM = os.environ.get("UPSTREAM_URL", "wss://tekstiks.ee/asr/v2")
+import tekstiks
+
+BACKEND = os.environ.get("BACKEND", "local")
 TOKEN = os.environ.get("PROXY_TOKEN", "")
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "25"))
 MAX_SECONDS = int(os.environ.get("MAX_AUDIO_SECONDS", "600"))
-LANGUAGES = {"et", "fastconformer_transducer_en_80ms", "fastconformer_transducer_en_1040ms"}
 
 RATE = 16000
 BYTES_PER_SEC = RATE * 2  # 16-bit mono PCM
-CHUNK = BYTES_PER_SEC // 2
-
-# The server sends no usable "final" result: every partial is the whole
-# utterance so far, and the one closing message is "[Session Ended]". Sending
-# "stop" also discards audio it has not decoded yet. So we send everything,
-# then wait until the transcript has stopped changing for QUIET seconds.
-QUIET = float(os.environ.get("QUIET_SECONDS", "2.5"))
-
-# When tekstiks.ee's recogniser is down, its nginx still accepts the connection
-# and then never answers. Without a limit the request hangs until the iOS
-# Shortcut gives up with a bare "request timed out".
-CONNECT_TIMEOUT = float(os.environ.get("CONNECT_TIMEOUT_SECONDS", "10"))
-TRAILING_SILENCE = b"\0" * BYTES_PER_SEC
 
 log = logging.getLogger("tekstiks-proxy")
 
 
 class BadAudio(Exception):
-    pass
-
-
-class UpstreamDown(Exception):
     pass
 
 
@@ -71,100 +52,17 @@ async def to_pcm(data: bytes) -> bytes:
     return out
 
 
-class Transcript:
-    """Joins partials into text.
-
-    Each partial normally extends the previous one, so the latest wins. If the
-    server ever starts a fresh segment (a partial that does not continue the
-    previous one), the old text is kept rather than overwritten.
-    """
-
-    def __init__(self):
-        self.done: list[str] = []
-        self.current = ""
-
-    def update(self, text: str):
-        text = text.strip()
-        if not text:
-            return
-        prev = self.current
-        anchor = prev[: max(1, min(len(prev), 12) // 2)]
-        if prev and not text.startswith(anchor):
-            self.done.append(prev)
-        self.current = text
-
-    def text(self) -> str:
-        return " ".join(self.done + ([self.current] if self.current else [])).strip()
-
-
-async def recognize(session: ClientSession, pcm: bytes, language: str) -> str:
-    transcript = Transcript()
-    last_activity = time.monotonic()
-    sent_all = asyncio.Event()
-
-    try:
-        ws = await asyncio.wait_for(
-            session.ws_connect(UPSTREAM, heartbeat=20, max_msg_size=0), CONNECT_TIMEOUT)
-    except (asyncio.TimeoutError, OSError) as e:
-        raise UpstreamDown(f"could not connect ({type(e).__name__})") from e
-
-    async with ws:
-        await ws.send_str(json.dumps({"type": "start", "sample_rate": RATE, "format": "pcm", "language": language}))
-        try:
-            msg = await ws.receive(timeout=CONNECT_TIMEOUT)
-        except asyncio.TimeoutError as e:
-            raise UpstreamDown("connected, but no reply to start") from e
-        ready = json.loads(msg.data) if msg.type == WSMsgType.TEXT else {}
-        if ready.get("type") != "ready":
-            raise RuntimeError(f"upstream did not accept session: {msg.data!r}")
-
-        async def send():
-            nonlocal last_activity
-            audio = pcm + TRAILING_SILENCE
-            for i in range(0, len(audio), CHUNK):
-                payload = base64.b64encode(audio[i : i + CHUNK]).decode()
-                await ws.send_str(json.dumps({"type": "audio", "data": payload}))
-            last_activity = time.monotonic()
-            sent_all.set()
-
-        async def receive():
-            nonlocal last_activity
-            async for m in ws:
-                if m.type != WSMsgType.TEXT:
-                    continue
-                d = json.loads(m.data)
-                if d.get("type") == "transcript":
-                    if d.get("text", "").strip() == "[Session Ended]":
-                        return
-                    transcript.update(d.get("text", ""))
-                    last_activity = time.monotonic()
-                elif d.get("type") == "error":
-                    raise RuntimeError(f"upstream error: {d.get('message')}")
-                elif d.get("type") == "session_ended":
-                    return
-
-        sender = asyncio.create_task(send())
-        receiver = asyncio.create_task(receive())
-        deadline = time.monotonic() + 30 + len(pcm) / BYTES_PER_SEC
-        try:
-            while not receiver.done():
-                if sender.done() and sender.exception():
-                    raise sender.exception()
-                now = time.monotonic()
-                if sent_all.is_set() and now - last_activity > QUIET:
-                    break
-                if now > deadline:
-                    log.warning("deadline hit; returning partial transcript")
-                    break
-                await asyncio.sleep(0.1)
-            if receiver.done() and receiver.exception():
-                raise receiver.exception()
-            if not ws.closed:
-                await ws.send_str(json.dumps({"type": "stop"}))
-        finally:
-            sender.cancel()
-            receiver.cancel()
-    return transcript.text()
+def tidy(text: str) -> str:
+    # The Zipformer punctuates from what follows each word, so the start stays
+    # lowercase and the last sentence gets no full stop (or ends on a comma).
+    text = text.strip()
+    if not text:
+        return text
+    if text.endswith(","):
+        text = text[:-1] + "."
+    elif text[-1].isalnum():
+        text += "."
+    return text[0].upper() + text[1:]
 
 
 def error(status: int, message: str) -> web.Response:
@@ -197,8 +95,8 @@ async def transcribe(request: web.Request) -> web.Response:
     if not authorized(request):
         return error(401, "wrong or missing token")
     language = request.query.get("lang", "et")
-    if language not in LANGUAGES:
-        return error(400, f"lang must be one of {sorted(LANGUAGES)}")
+    if BACKEND == "tekstiks" and language not in tekstiks.LANGUAGES:
+        return error(400, f"lang must be one of {sorted(tekstiks.LANGUAGES)}")
 
     data = await read_audio(request)
     if not data:
@@ -211,17 +109,23 @@ async def transcribe(request: web.Request) -> web.Response:
         return error(415, f"could not decode audio: {e}")
 
     try:
-        text = await recognize(request.app["http"], pcm, language)
-    except UpstreamDown as e:
+        if BACKEND == "tekstiks":
+            text = await tekstiks.recognize(request.app["http"], pcm, language)
+        else:
+            # The local model is bilingual (et/en) and takes no language setting.
+            text = await request.app["asr"].transcribe(pcm)
+    except tekstiks.UpstreamDown as e:
         log.warning("tekstiks.ee unavailable: %s", e)
         return error(503, "tekstiks.ee is not responding right now. Try again later.")
     except Exception as e:
         log.exception("recognition failed")
         return error(502, f"recognition failed: {e}")
+
+    text = tidy(text)
     if not text:
         return error(422, "no speech recognised")
 
-    log.info("%.1fs audio -> %d chars in %.1fs", len(pcm) / BYTES_PER_SEC, len(text), time.monotonic() - t0)
+    log.info("%.1fs audio -> %d chars in %.2fs", len(pcm) / BYTES_PER_SEC, len(text), time.monotonic() - t0)
     return web.Response(text=text, content_type="text/plain", charset="utf-8")
 
 
@@ -229,22 +133,32 @@ async def health(_: web.Request) -> web.Response:
     return web.Response(text="ok\n")
 
 
-async def make_app() -> web.Application:
+def make_app() -> web.Application:
     app = web.Application(client_max_size=MAX_UPLOAD_MB * 1024 * 1024)
     app.router.add_post("/transcribe", transcribe)
     app.router.add_get("/", health)
 
-    async def http_session(app):
-        app["http"] = ClientSession()
-        yield
-        await app["http"].close()
+    if BACKEND == "tekstiks":
+        async def http_session(app):
+            app["http"] = ClientSession()
+            yield
+            await app["http"].close()
 
-    app.cleanup_ctx.append(http_session)
+        app.cleanup_ctx.append(http_session)
+    else:
+        import local_asr
+
+        # Load before the server starts listening: Cloud Run sends no traffic to
+        # an instance until its port is open, so no request ever waits on this.
+        app["asr"] = local_asr.from_env()
     return app
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    if BACKEND not in ("local", "tekstiks"):
+        raise SystemExit(f"BACKEND must be 'local' or 'tekstiks', not {BACKEND!r}")
     if not TOKEN:
         log.warning("PROXY_TOKEN is not set: anyone who finds this URL can use it")
+    log.info("backend: %s", BACKEND)
     web.run_app(make_app(), port=int(os.environ.get("PORT", "8080")))
