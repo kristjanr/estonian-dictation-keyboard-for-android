@@ -35,12 +35,21 @@ CHUNK = BYTES_PER_SEC // 2
 # "stop" also discards audio it has not decoded yet. So we send everything,
 # then wait until the transcript has stopped changing for QUIET seconds.
 QUIET = float(os.environ.get("QUIET_SECONDS", "2.5"))
+
+# When tekstiks.ee's recogniser is down, its nginx still accepts the connection
+# and then never answers. Without a limit the request hangs until the iOS
+# Shortcut gives up with a bare "request timed out".
+CONNECT_TIMEOUT = float(os.environ.get("CONNECT_TIMEOUT_SECONDS", "10"))
 TRAILING_SILENCE = b"\0" * BYTES_PER_SEC
 
 log = logging.getLogger("tekstiks-proxy")
 
 
 class BadAudio(Exception):
+    pass
+
+
+class UpstreamDown(Exception):
     pass
 
 
@@ -93,9 +102,18 @@ async def recognize(session: ClientSession, pcm: bytes, language: str) -> str:
     last_activity = time.monotonic()
     sent_all = asyncio.Event()
 
-    async with session.ws_connect(UPSTREAM, heartbeat=20, max_msg_size=0) as ws:
+    try:
+        ws = await asyncio.wait_for(
+            session.ws_connect(UPSTREAM, heartbeat=20, max_msg_size=0), CONNECT_TIMEOUT)
+    except (asyncio.TimeoutError, OSError) as e:
+        raise UpstreamDown(f"could not connect ({type(e).__name__})") from e
+
+    async with ws:
         await ws.send_str(json.dumps({"type": "start", "sample_rate": RATE, "format": "pcm", "language": language}))
-        msg = await ws.receive(timeout=15)
+        try:
+            msg = await ws.receive(timeout=CONNECT_TIMEOUT)
+        except asyncio.TimeoutError as e:
+            raise UpstreamDown("connected, but no reply to start") from e
         ready = json.loads(msg.data) if msg.type == WSMsgType.TEXT else {}
         if ready.get("type") != "ready":
             raise RuntimeError(f"upstream did not accept session: {msg.data!r}")
@@ -149,6 +167,13 @@ async def recognize(session: ClientSession, pcm: bytes, language: str) -> str:
     return transcript.text()
 
 
+def error(status: int, message: str) -> web.Response:
+    # Shortcuts passes the body of a failed request on as if it were the
+    # result, so every failure starts with "ERROR:" for the Shortcut to check
+    # before it sends anything to anyone.
+    return web.Response(status=status, text=f"ERROR: {message}\n")
+
+
 def authorized(request: web.Request) -> bool:
     if not TOKEN:
         return True
@@ -170,26 +195,31 @@ async def read_audio(request: web.Request) -> bytes:
 
 async def transcribe(request: web.Request) -> web.Response:
     if not authorized(request):
-        return web.Response(status=401, text="unauthorized\n")
+        return error(401, "wrong or missing token")
     language = request.query.get("lang", "et")
     if language not in LANGUAGES:
-        return web.Response(status=400, text=f"lang must be one of {sorted(LANGUAGES)}\n")
+        return error(400, f"lang must be one of {sorted(LANGUAGES)}")
 
     data = await read_audio(request)
     if not data:
-        return web.Response(status=400, text="no audio in request body\n")
+        return error(400, "no audio in request body")
 
     t0 = time.monotonic()
     try:
         pcm = await to_pcm(data)
     except BadAudio as e:
-        return web.Response(status=415, text=f"could not decode audio: {e}\n")
+        return error(415, f"could not decode audio: {e}")
 
     try:
         text = await recognize(request.app["http"], pcm, language)
+    except UpstreamDown as e:
+        log.warning("tekstiks.ee unavailable: %s", e)
+        return error(503, "tekstiks.ee is not responding right now. Try again later.")
     except Exception as e:
         log.exception("recognition failed")
-        return web.Response(status=502, text=f"recognition failed: {e}\n")
+        return error(502, f"recognition failed: {e}")
+    if not text:
+        return error(422, "no speech recognised")
 
     log.info("%.1fs audio -> %d chars in %.1fs", len(pcm) / BYTES_PER_SEC, len(text), time.monotonic() - t0)
     return web.Response(text=text, content_type="text/plain", charset="utf-8")
